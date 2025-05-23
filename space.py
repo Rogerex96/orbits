@@ -41,8 +41,6 @@ def save_orbits(space, filename):
     except Exception as e:
         print(f"ERROR escrivint òrbites: {e}")
 
-
-
 def load_satellites(space, filename):
     space.satellites.clear()
     try:
@@ -68,9 +66,6 @@ def save_satellites(space, filename):
                 f.write(f"{sat.name} {sat.orbit.name} {sat.mass} {sat.fuel}\n")
     except Exception as e:
         print(f"ERROR escrivint satèl·lits: {e}")
-
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 
 def plot_space(space):
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -99,3 +94,5 @@ def plot_space(space):
     plt.legend()
     plt.show()
 
+def update_all_positions(space, dt):
+    for sat in space.satellites: sat.update_position(dt)

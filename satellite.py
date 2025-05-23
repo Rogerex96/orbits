@@ -1,4 +1,3 @@
-from orbit import Orbit
 class Satellite:
     def __init__(self, name, orbit, mass, fuel):
         self.name=name

@@ -1,5 +1,6 @@
 import math
-#KSA
+#KSA1
+#KSP
 class Orbit:
     def __init__(self, name, period, epsilon, a):
         self.name = name

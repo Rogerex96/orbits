@@ -1,20 +1,11 @@
-from space import (
-    load_orbits, load_satellites,
-    save_orbits, save_satellites,
-    update_all_positions, Space, get_orbit
-)
+from space import (load_orbits, load_satellites,save_orbits, save_satellites,update_all_positions, Space, get_orbit)
 from orbit import Orbit
 from satellite import Satellite
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QTabWidget,
-    QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QPushButton, QFileDialog, QMessageBox,
-    QGroupBox, QFormLayout, QLineEdit
-)
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QApplication, QSlider, QMainWindow, QWidget, QFrame, QTabWidget,QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,QPushButton, QFileDialog, QMessageBox,QGroupBox, QFormLayout, QLineEdit)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation
 
 def plot(space, ax):
     # Dibuixa la Terra
@@ -23,10 +14,7 @@ def plot(space, ax):
     # Dibuixa les òrbites
     for orbit in space.orbits:
         x0 = -orbit.a * orbit.epsilon
-        ellipse = patches.Ellipse(
-            (x0, 0), 2*orbit.a, 2*orbit.b,
-            fill=False, linestyle='--', label=orbit.name
-        )
+        ellipse = patches.Ellipse((x0, 0), 2*orbit.a, 2*orbit.b,fill=False, linestyle='--', label=orbit.name)
         ax.add_patch(ellipse)
     # Dibuixa els satèl·lits
     for sat in space.satellites:
@@ -43,23 +31,99 @@ def plot(space, ax):
 class OrbitViewer(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout(self)
+
+        # ── Layout principal: 3 columnes ────────────────────────────────
+        layout = QHBoxLayout(self)
+        left_container   = QWidget(self)
+        left_layout      = QGridLayout(left_container)
+        center_layout    = QVBoxLayout()
+        right_layout     = QVBoxLayout()
+
+        # ── Canvas de la simulació ─────────────────────────────────────
         self.figure, self.ax = plt.subplots(figsize=(10, 6))
         self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
 
-    def refresh(self, space, time=0):
-        update_all_positions(space, time)
+        # ── Frame del timer ─────────────────────────────────────────────
+        timer_frame = QFrame(self)
+        timer_frame.setFrameShape(QFrame.StyledPanel)
+        timer_frame.setStyleSheet("QFrame { background: #222; border-radius: 6px; }")
+        tf_layout = QVBoxLayout(timer_frame)
+        tf_layout.setContentsMargins(8, 8, 8, 8)
+        self.time = 0
+        self.time_label = QLabel("Temps: 0 s", self)
+        self.time_label.setAlignment(Qt.AlignCenter)
+        self.time_label.setStyleSheet("font: bold 14px; color: #fff;")
+        tf_layout.addWidget(self.time_label)
+
+        # ── Frame de l’accelerador ──────────────────────────────────────
+        acc_frame = QFrame(self)
+        acc_frame.setFrameShape(QFrame.StyledPanel)
+        acc_frame.setStyleSheet("QFrame { background: #333; border-radius: 6px; }")
+        af_layout = QVBoxLayout(acc_frame)
+        af_layout.setContentsMargins(8, 8, 8, 8)
+        self.speed = 1
+        self.speed_label = QLabel("x1", self)
+        self.speed_label.setAlignment(Qt.AlignCenter)
+        self.speed_label.setStyleSheet("font: 13px; color: #ddd;")
+        af_layout.addWidget(self.speed_label)
+        self.speed_slider = QSlider(Qt.Horizontal, self)
+        self.speed_slider.setRange(0, 3)      # 0→x1, 1→x2, 2→x4, 3→x8
+        self.speed_slider.setValue(0)
+        self.speed_slider.setTickPosition(QSlider.TicksBelow)
+        self.speed_slider.setTickInterval(1)
+        self.speed_slider.setStyleSheet("""
+            QSlider::groove:horizontal { height: 6px; background: #555; border-radius: 3px; }
+            QSlider::handle:horizontal { width: 14px; background: #ff5722; border-radius: 7px; margin: -4px 0; }
+        """)
+        self.speed_slider.valueChanged.connect(self._on_speed_change)
+        af_layout.addWidget(self.speed_slider)
+
+        # ── Posa timer i accelerador en una quadrícula (un sota l’altre) ──
+        left_layout.addWidget(timer_frame, 0, 0)
+        left_layout.addWidget(acc_frame,   1, 0)
+        left_layout.setRowStretch(2, 1)  # empenta l’espai restant cap avall
+
+        # ── Columna central amb el plot ─────────────────────────────────
+        center_layout.addWidget(self.canvas, stretch=1)
+
+        # ── Afegeix columnes al layout principal ────────────────────────
+        layout.addWidget(left_container,   0)
+        layout.addLayout(center_layout,    1)
+        layout.addLayout(right_layout,     0)
+
+        # ── Configura el temporitzador (s’iniciarà en carregar dades) ─
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._update_time)
+
+        # ── Animació d’aparició del slider ─────────────────────────────
+        anim = QPropertyAnimation(acc_frame, b"windowOpacity", self)
+        anim.setDuration(300)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.start()
+
+    def _on_speed_change(self, val: int):
+        self.speed = 2 ** val
+        self.speed_label.setText(f"x{self.speed}")
+
+    def refresh(self, space, t=0):
+        update_all_positions(space, t)
         self.ax.clear()
         plot(space, self.ax)
         self.canvas.draw()
 
+    def _update_time(self):
+        self.time += self.speed
+        self.time_label.setText(f"Temps: {self.time} s")
+        if hasattr(self, 'space'):
+            self.refresh(self.space, self.time)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Simulador Orbital")
+        self.setWindowTitle("Oorbit")
         self.resize(1200, 800)
-
+        
         # Espai orbital
         self.space = Space()
 
@@ -133,6 +197,7 @@ class MainWindow(QMainWindow):
 
         # --- Pestanya Visualització ---
         self.viewer = OrbitViewer()
+        self.viewer.space = self.space
         tabs.addTab(self.viewer, "Visualització")
 
         # Connexions
@@ -147,15 +212,11 @@ class MainWindow(QMainWindow):
 
     def _load_both(self):
         # 1) Fitxer d'òrbites
-        orbit_file, _ = QFileDialog.getOpenFileName(
-            self, "Selecciona fitxer d'òrbites", "", "Text Files (*.txt);;All Files (*)"
-        )
+        orbit_file, _ = QFileDialog.getOpenFileName(self, "Selecciona fitxer d'òrbites", "", "Text Files (*.txt);;All Files (*)")
         if not orbit_file:
             return
         # 2) Fitxer de satèl·lits
-        sat_file, _ = QFileDialog.getOpenFileName(
-            self, "Selecciona fitxer de satèl·lits", "", "Text Files (*.txt);;All Files (*)"
-        )
+        sat_file, _ = QFileDialog.getOpenFileName(self, "Selecciona fitxer de satèl·lits", "", "Text Files (*.txt);;All Files (*)")
         if not sat_file:
             return
 
@@ -163,31 +224,25 @@ class MainWindow(QMainWindow):
         load_satellites(self.space, sat_file)
         update_all_positions(self.space, 0)
         self.viewer.refresh(self.space)
+        self.viewer.time = 0
+        self.viewer.time_label.setText("Temps: 0 s")
+        self.viewer.timer.start(1000)
 
     def _save_orbits(self):
-        fname, _ = QFileDialog.getSaveFileName(
-            self, "Desar òrbites", "", "Text Files (*.txt);;All Files (*)"
-        )
+        fname, _ = QFileDialog.getSaveFileName(self, "Desar òrbites", "", "Text Files (*.txt);;All Files (*)")
         if fname:
             save_orbits(self.space, fname)
             QMessageBox.information(self, "✔", "Òrbites desades.")
 
     def _save_sats(self):
-        fname, _ = QFileDialog.getSaveFileName(
-            self, "Desar satèl·lits", "", "Text Files (*.txt);;All Files (*)"
-        )
+        fname, _ = QFileDialog.getSaveFileName(self, "Desar satèl·lits", "", "Text Files (*.txt);;All Files (*)")
         if fname:
             save_satellites(self.space, fname)
             QMessageBox.information(self, "✔", "Satèl·lits desats.")
 
     def _add_orbit(self):
         try:
-            orbit = Orbit(
-                self.orbit_name_edit.text().strip(),
-                float(self.orbit_period_edit.text()),
-                float(self.orbit_epsilon_edit.text()),
-                float(self.orbit_a_edit.text())
-            )
+            orbit = Orbit(self.orbit_name_edit.text().strip(),float(self.orbit_period_edit.text()),float(self.orbit_epsilon_edit.text()),float(self.orbit_a_edit.text()))
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Dades d'òrbita no vàlides.\n{e}")
             return
@@ -203,12 +258,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", f"Òrbita «{orbitname}» no trobada.")
             return
         try:
-            sat = Satellite(
-                name,
-                orbit,
-                float(self.sat_mass_edit.text()),
-                float(self.sat_fuel_edit.text())
-            )
+            sat = Satellite(name,orbit,float(self.sat_mass_edit.text()),float(self.sat_fuel_edit.text()))
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Dades de satèl·lit no vàlides.\n{e}")
             return
@@ -221,4 +271,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     app.exec()
-
