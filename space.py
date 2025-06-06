@@ -94,5 +94,3 @@ def plot_space(space):
     plt.legend()
     plt.show()
 
-def update_all_positions(space, dt):
-    for sat in space.satellites: sat.update_position(dt)

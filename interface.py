@@ -32,18 +32,16 @@ class OrbitViewer(QWidget):
     def __init__(self):
         super().__init__()
 
-        # ── Layout principal: 3 columnes ────────────────────────────────
         layout = QHBoxLayout(self)
         left_container   = QWidget(self)
         left_layout      = QGridLayout(left_container)
         center_layout    = QVBoxLayout()
         right_layout     = QVBoxLayout()
 
-        # ── Canvas de la simulació ─────────────────────────────────────
         self.figure, self.ax = plt.subplots(figsize=(10, 6))
         self.canvas = FigureCanvas(self.figure)
 
-        # ── Frame del timer ─────────────────────────────────────────────
+        #Timer
         timer_frame = QFrame(self)
         timer_frame.setFrameShape(QFrame.StyledPanel)
         timer_frame.setStyleSheet("QFrame { background: #222; border-radius: 6px; }")
@@ -55,7 +53,7 @@ class OrbitViewer(QWidget):
         self.time_label.setStyleSheet("font: bold 14px; color: #fff;")
         tf_layout.addWidget(self.time_label)
 
-        # ── Frame de l’accelerador ──────────────────────────────────────
+        #Accelerador
         acc_frame = QFrame(self)
         acc_frame.setFrameShape(QFrame.StyledPanel)
         acc_frame.setStyleSheet("QFrame { background: #333; border-radius: 6px; }")
@@ -67,35 +65,27 @@ class OrbitViewer(QWidget):
         self.speed_label.setStyleSheet("font: 13px; color: #ddd;")
         af_layout.addWidget(self.speed_label)
         self.speed_slider = QSlider(Qt.Horizontal, self)
-        self.speed_slider.setRange(0, 3)      # 0→x1, 1→x2, 2→x4, 3→x8
+        self.speed_slider.setRange(0, 3)
         self.speed_slider.setValue(0)
         self.speed_slider.setTickPosition(QSlider.TicksBelow)
         self.speed_slider.setTickInterval(1)
-        self.speed_slider.setStyleSheet("""
-            QSlider::groove:horizontal { height: 6px; background: #555; border-radius: 3px; }
-            QSlider::handle:horizontal { width: 14px; background: #ff5722; border-radius: 7px; margin: -4px 0; }
-        """)
+        self.speed_slider.setStyleSheet("""QSlider::groove:horizontal { height: 6px; background: #555; border-radius: 3px; }QSlider::handle:horizontal { width: 14px; background: #ff5722; border-radius: 7px; margin: -4px 0; }""")
         self.speed_slider.valueChanged.connect(self._on_speed_change)
         af_layout.addWidget(self.speed_slider)
 
-        # ── Posa timer i accelerador en una quadrícula (un sota l’altre) ──
         left_layout.addWidget(timer_frame, 0, 0)
         left_layout.addWidget(acc_frame,   1, 0)
-        left_layout.setRowStretch(2, 1)  # empenta l’espai restant cap avall
+        left_layout.setRowStretch(2, 1)
 
-        # ── Columna central amb el plot ─────────────────────────────────
         center_layout.addWidget(self.canvas, stretch=1)
 
-        # ── Afegeix columnes al layout principal ────────────────────────
         layout.addWidget(left_container,   0)
         layout.addLayout(center_layout,    1)
         layout.addLayout(right_layout,     0)
 
-        # ── Configura el temporitzador (s’iniciarà en carregar dades) ─
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._update_time)
 
-        # ── Animació d’aparició del slider ─────────────────────────────
         anim = QPropertyAnimation(acc_frame, b"windowOpacity", self)
         anim.setDuration(300)
         anim.setStartValue(0.0)
@@ -124,43 +114,34 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Oorbit")
         self.resize(1200, 800)
         
-        # Espai orbital
         self.space = Space()
 
-        # Pestanyes
         tabs = QTabWidget()
         self.setCentralWidget(tabs)
 
-        # --- Pestanya Configuració ---
         cfg_tab = QWidget()
         cfg_layout = QHBoxLayout(cfg_tab)
 
-        # Placeholder esquerre
         left_placeholder = QLabel("")
         cfg_layout.addWidget(left_placeholder, 1)
 
-        # Panell dret amb grid 3×2
         right_panel = QWidget()
         grid = QGridLayout(right_panel)
         grid.setContentsMargins(10, 10, 10, 10)
         grid.setSpacing(15)
 
-        # 1) Unic botó: Carregar dades (òrbitas + satèl·lits)
         self.btn_load_data = QPushButton("Carregar dades")
         grid.addWidget(self.btn_load_data, 0, 0, 1, 2)
 
-        # 2 & 3) Botons de desar
         self.btn_save_orbits = QPushButton("Desar òrbites")
         self.btn_save_sats = QPushButton("Desar satèl·lits")
         grid.addWidget(self.btn_save_orbits, 1, 0)
         grid.addWidget(self.btn_save_sats,   1, 1)
 
-        # 4) Formularis agrupats (spanning 2 columnes)
         forms_container = QWidget()
         forms_layout = QVBoxLayout(forms_container)
         forms_layout.setSpacing(20)
 
-        # 4a) Formulari nou òrbita
         orbit_box = QGroupBox("Nou Òrbita")
         form_orbit = QFormLayout(orbit_box)
         self.orbit_name_edit    = QLineEdit()
@@ -175,7 +156,6 @@ class MainWindow(QMainWindow):
         form_orbit.addWidget(self.add_orbit_btn)
         forms_layout.addWidget(orbit_box)
 
-        # 4b) Formulari nou satèl·lit
         sat_box = QGroupBox("Nou Satèl·lit")
         form_sat = QFormLayout(sat_box)
         self.sat_name_edit       = QLineEdit()
@@ -195,27 +175,22 @@ class MainWindow(QMainWindow):
         cfg_layout.addWidget(right_panel, 0)
         tabs.addTab(cfg_tab, "Configuració")
 
-        # --- Pestanya Visualització ---
         self.viewer = OrbitViewer()
         self.viewer.space = self.space
         tabs.addTab(self.viewer, "Visualització")
 
-        # Connexions
         self.btn_load_data.clicked.connect(self._load_both)
         self.btn_save_orbits.clicked.connect(self._save_orbits)
         self.btn_save_sats.clicked.connect(self._save_sats)
         self.add_orbit_btn.clicked.connect(self._add_orbit)
         self.add_sat_btn.clicked.connect(self._add_sat)
 
-        # Dibuix inicial
         self.viewer.refresh(self.space)
 
     def _load_both(self):
-        # 1) Fitxer d'òrbites
         orbit_file, _ = QFileDialog.getOpenFileName(self, "Selecciona fitxer d'òrbites", "", "Text Files (*.txt);;All Files (*)")
         if not orbit_file:
             return
-        # 2) Fitxer de satèl·lits
         sat_file, _ = QFileDialog.getOpenFileName(self, "Selecciona fitxer de satèl·lits", "", "Text Files (*.txt);;All Files (*)")
         if not sat_file:
             return
