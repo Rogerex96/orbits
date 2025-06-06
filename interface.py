@@ -1,11 +1,12 @@
 from space import (load_orbits, load_satellites,save_orbits, save_satellites,update_all_positions, Space, get_orbit)
 from orbit import Orbit
-from satellite import Satellite
-from PySide6.QtWidgets import (QApplication, QSlider, QMainWindow, QWidget, QFrame, QTabWidget,QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,QPushButton, QFileDialog, QMessageBox,QGroupBox, QFormLayout, QLineEdit)
+from satellite import Satellite, change_orbit
+from PySide6.QtWidgets import (QApplication, QSlider, QComboBox, QMainWindow, QWidget, QFrame, QTabWidget,QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,QPushButton, QFileDialog, QMessageBox,QGroupBox, QFormLayout, QLineEdit)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation
+import math
 
 def plot(space, ax):
     # Dibuixa la Terra
@@ -138,39 +139,65 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.btn_save_orbits, 1, 0)
         grid.addWidget(self.btn_save_sats,   1, 1)
 
+        change_box = QGroupBox("Canvi d'òrbita")
+        form_co = QFormLayout(change_box)
+
+        self.co_sat_combo = QComboBox()
+        self.co_dest_combo = QComboBox()
+        self.co_change_btn = QPushButton("Canvia")
+
+        form_co.addRow("Satèl·lit", self.co_sat_combo)
+        self.co_period_edit = QLineEdit(); self.co_period_edit.setReadOnly(True)
+        self.co_eps_edit = QLineEdit(); self.co_eps_edit.setReadOnly(True)
+        self.co_a_edit = QLineEdit(); self.co_a_edit.setReadOnly(True)
+        form_co.addRow("Òrbita destí", self.co_dest_combo)
+        form_co.addRow("Període", self.co_period_edit)
+        form_co.addRow("Epsilon", self.co_eps_edit)
+        form_co.addRow("Semi-eix", self.co_a_edit)
+        self.co_dv_edit = QLineEdit(); self.co_dv_edit.setReadOnly(True)
+        form_co.addRow("Δv (m/s)", self.co_dv_edit)
+        self.co_dv_avail_edit = QLineEdit(); self.co_dv_avail_edit.setReadOnly(True)
+        form_co.addRow("Δv disponible", self.co_dv_avail_edit)
+        form_co.addRow(self.co_change_btn)
+
         forms_container = QWidget()
         forms_layout = QVBoxLayout(forms_container)
         forms_layout.setSpacing(20)
 
-        orbit_box = QGroupBox("Nou Òrbita")
+        orbit_box = QGroupBox("Nova Òrbita")
         form_orbit = QFormLayout(orbit_box)
-        self.orbit_name_edit    = QLineEdit()
-        self.orbit_period_edit  = QLineEdit()
+        self.orbit_name_edit = QLineEdit()
+        self.orbit_period_edit = QLineEdit()
         self.orbit_epsilon_edit = QLineEdit()
-        self.orbit_a_edit       = QLineEdit()
-        form_orbit.addRow("Nom",       self.orbit_name_edit)
-        form_orbit.addRow("Període",   self.orbit_period_edit)
-        form_orbit.addRow("Epsilon",   self.orbit_epsilon_edit)
-        form_orbit.addRow("Semi-eix",  self.orbit_a_edit)
+        self.orbit_a_edit = QLineEdit()
+        form_orbit.addRow("Nom", self.orbit_name_edit)
+        form_orbit.addRow("Període", self.orbit_period_edit)
+        form_orbit.addRow("Epsilon", self.orbit_epsilon_edit)
+        form_orbit.addRow("Semi-eix", self.orbit_a_edit)
         self.add_orbit_btn = QPushButton("Afegeix Òrbita")
         form_orbit.addWidget(self.add_orbit_btn)
         forms_layout.addWidget(orbit_box)
 
         sat_box = QGroupBox("Nou Satèl·lit")
         form_sat = QFormLayout(sat_box)
-        self.sat_name_edit       = QLineEdit()
-        self.sat_orbitname_edit  = QLineEdit()
-        self.sat_mass_edit       = QLineEdit()
-        self.sat_fuel_edit       = QLineEdit()
-        form_sat.addRow("Nom",    self.sat_name_edit)
+        self.sat_name_edit = QLineEdit()
+        self.sat_orbitname_edit = QLineEdit()
+        self.sat_mass_edit = QLineEdit()
+        self.sat_fuel_edit = QLineEdit()
+        form_sat.addRow("Nom", self.sat_name_edit)
         form_sat.addRow("Òrbita", self.sat_orbitname_edit)
-        form_sat.addRow("Massa",  self.sat_mass_edit)
-        form_sat.addRow("Fuel",   self.sat_fuel_edit)
+        form_sat.addRow("Massa", self.sat_mass_edit)
+        form_sat.addRow("Fuel", self.sat_fuel_edit)
         self.add_sat_btn = QPushButton("Afegeix Satèl·lit")
         form_sat.addWidget(self.add_sat_btn)
         forms_layout.addWidget(sat_box)
 
-        grid.addWidget(forms_container, 2, 0, 1, 2)
+        #Posicions
+        grid.addWidget(change_box, 0, 0, 3, 1)
+        grid.addWidget(self.btn_load_data, 0, 1, 1, 2)
+        grid.addWidget(self.btn_save_orbits, 1, 1)
+        grid.addWidget(self.btn_save_sats, 1, 2)
+        grid.addWidget(forms_container, 2, 1, 1, 2)
 
         cfg_layout.addWidget(right_panel, 0)
         tabs.addTab(cfg_tab, "Configuració")
@@ -184,7 +211,13 @@ class MainWindow(QMainWindow):
         self.btn_save_sats.clicked.connect(self._save_sats)
         self.add_orbit_btn.clicked.connect(self._add_orbit)
         self.add_sat_btn.clicked.connect(self._add_sat)
+        self.co_dest_combo.currentIndexChanged.connect(self._update_dest_params)
+        self.co_dest_combo.currentIndexChanged.connect(self._update_dv)
+        self.co_sat_combo.currentIndexChanged.connect(self._update_dv)
+        self.co_change_btn.clicked.connect(self._change_orbit)
 
+
+        self._refresh_selectors()
         self.viewer.refresh(self.space)
 
     def _load_both(self):
@@ -198,6 +231,7 @@ class MainWindow(QMainWindow):
         load_orbits(self.space, orbit_file)
         load_satellites(self.space, sat_file)
         update_all_positions(self.space, 0)
+        self._refresh_selectors()
         self.viewer.refresh(self.space)
         self.viewer.time = 0
         self.viewer.time_label.setText("Temps: 0 s")
@@ -223,12 +257,13 @@ class MainWindow(QMainWindow):
             return
         self.space.orbits.append(orbit)
         self.viewer.refresh(self.space)
+        self._refresh_selectors()
         QMessageBox.information(self, "✔", f"Òrbita «{orbit.name}» afegida.")
 
     def _add_sat(self):
-        name      = self.sat_name_edit.text().strip()
+        name  = self.sat_name_edit.text().strip()
         orbitname = self.sat_orbitname_edit.text().strip()
-        orbit     = get_orbit(self.space, orbitname)
+        orbit = get_orbit(self.space, orbitname)
         if not orbit:
             QMessageBox.warning(self, "Error", f"Òrbita «{orbitname}» no trobada.")
             return
@@ -239,7 +274,82 @@ class MainWindow(QMainWindow):
             return
         self.space.satellites.append(sat)
         self.viewer.refresh(self.space)
+        self._refresh_selectors()
         QMessageBox.information(self, "✔", f"Satèl·lit «{sat.name}» afegit.")
+
+    def _change_orbit(self):
+        sat_name  = self.co_sat_combo.currentText()
+        dest_name = self.co_dest_combo.currentText()
+        sat  = next((s for s in self.space.satellites if s.name == sat_name), None)
+        dest = get_orbit(self.space, dest_name)
+        if not (sat and dest):
+            QMessageBox.warning(self, "Error", "Selecció no vàlida.")
+            return
+        if change_orbit(sat, dest):
+            self.viewer.refresh(self.space)
+            self._update_dv()
+            QMessageBox.information(self, "✔", f"{sat.name} → {dest.name}")
+        else:
+            QMessageBox.warning(self, "Combustible insuficient",
+                                f"{sat.name} no pot arribar a {dest.name}.")
+
+    def _update_dest_params(self):
+        name = self.co_dest_combo.currentText()
+        orbit = get_orbit(self.space, name)
+        if orbit:
+            self.co_period_edit.setText(f"{orbit.period:.0f}")
+            self.co_eps_edit.setText(f"{orbit.epsilon:.6f}")
+            self.co_a_edit.setText(f"{orbit.a:.0f} km")
+        else:
+            for w in (self.co_period_edit, self.co_eps_edit, self.co_a_edit):
+                w.clear()
+
+    def _refresh_selectors(self):
+        self.co_sat_combo.clear()
+        self.co_dest_combo.clear()
+
+        self.co_sat_combo.addItems([s.name for s in self.space.satellites])
+        self.co_dest_combo.addItems([o.name for o in self.space.orbits])
+
+        self._update_dest_params()
+        self._update_dv() 
+
+    def _update_dv(self):
+        sat_name  = self.co_sat_combo.currentText()
+        dest_name = self.co_dest_combo.currentText()
+        sat  = next((s for s in self.space.satellites if s.name == sat_name), None)
+        dest = get_orbit(self.space, dest_name)
+
+        if not (sat and dest):
+            self.co_dv_edit.clear()
+            self.co_dv_avail_edit.clear()
+            return
+
+        MU  = 3.986e14
+        ISP = 450
+        G0  = 9.80665
+
+        # Δv necessari (Hohmann)
+        a1 = sat.orbit.a * 1_000
+        a2 = dest.a      * 1_000
+        if abs(a1 - a2) < 1e-3:
+            dv_need = 0.0
+        else:
+            dv1 = math.sqrt(MU/a1) * (math.sqrt(2*a2/(a1+a2)) - 1)
+            dv2 = math.sqrt(MU/a2) * (1 - math.sqrt(2*a1/(a1+a2)))
+            dv_need = abs(dv1) + abs(dv2)
+
+        # Δv disponible amb el fuel restant
+        m0   = sat.mass
+        fuel = sat.fuel
+        dv_avail = 0.0
+        if fuel > 0 and m0 > fuel:
+            m_dry = m0 - fuel
+            dv_avail = ISP * G0 * math.log(m0 / m_dry)
+
+        self.co_dv_edit.setText(f"{dv_need:.1f}")
+        self.co_dv_avail_edit.setText(f"{dv_avail:.1f}")
+
 
 if __name__ == "__main__":
     app = QApplication([])
