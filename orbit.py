@@ -11,6 +11,7 @@ class Orbit:
         self.b = a * (1 - epsilon**2) ** 0.5
         self.x = 0
         self.y = 0
+        self.M0= 0.0
 
     def kepler_E(self, M):
         E = M
@@ -22,7 +23,7 @@ class Orbit:
         return E
 
     def new_position(self, time):
-        M = (2 * math.pi / self.period) * time
+        M = self.M0 + (2 * math.pi / self.period) * time
         E = self.kepler_E(M)
         self.x = self.a * (math.cos(E) - self.epsilon)
         self.y = self.b * math.sin(E)
